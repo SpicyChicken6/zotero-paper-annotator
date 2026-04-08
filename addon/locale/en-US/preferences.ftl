@@ -1,0 +1,12 @@
+pref-title = Zotero Paper Annotator Settings
+pref-api-key = API Key
+pref-api-base-url = API Base URL
+pref-model-name = Model Name
+pref-max-tokens = Max Token Threshold
+pref-auto-annotate =
+    .label = Auto-annotate on PDF open
+pref-color-key-finding = Key Finding Color
+pref-color-methodology = Methodology Color
+pref-color-conclusion = Conclusion Color
+pref-color-limitation = Limitation Color
+pref-help = { $name } Build { $version } { $time }

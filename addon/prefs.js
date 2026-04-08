@@ -1,0 +1,9 @@
+pref("apiKey", "");
+pref("apiBaseUrl", "https://api.deepseek.com");
+pref("modelName", "deepseek-chat");
+pref("maxTokenThreshold", 120000);
+pref("autoAnnotate", true);
+pref("colorKeyFinding", "#ffd400");
+pref("colorMethodology", "#2ea8e5");
+pref("colorConclusion", "#5fb236");
+pref("colorLimitation", "#f19837");

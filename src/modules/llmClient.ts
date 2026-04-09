@@ -94,7 +94,9 @@ async function callLLM(paperText: string): Promise<LLMResponse> {
   const model = getPref("modelName");
 
   if (!/^https:\/\/|^http:\/\/localhost/.test(baseUrl as string)) {
-    throw new Error(`Invalid API base URL: must start with https:// or http://localhost. Got: ${baseUrl}`);
+    throw new Error(
+      `Invalid API base URL: must start with https:// or http://localhost. Got: ${baseUrl}`,
+    );
   }
 
   const url = `${baseUrl}/v1/chat/completions`;

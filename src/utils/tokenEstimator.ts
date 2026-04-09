@@ -9,9 +9,6 @@ export function estimateTokens(text: string): number {
 /**
  * Check if text exceeds the given token threshold.
  */
-export function exceedsTokenLimit(
-  text: string,
-  maxTokens: number,
-): boolean {
+export function exceedsTokenLimit(text: string, maxTokens: number): boolean {
   return estimateTokens(text) > maxTokens;
 }

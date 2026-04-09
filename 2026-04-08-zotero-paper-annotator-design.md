@@ -118,12 +118,12 @@ The system prompt instructs the LLM to analyze the paper and return structured J
 
 ### Annotation Categories and Colors
 
-| Category       | Color  | Purpose                          |
-|----------------|--------|----------------------------------|
-| `key_finding`  | Yellow | Important results and discoveries |
-| `methodology`  | Blue   | Methods and experimental design   |
-| `conclusion`   | Green  | Conclusions and implications      |
-| `limitation`   | Orange | Limitations and caveats           |
+| Category      | Color  | Purpose                           |
+| ------------- | ------ | --------------------------------- |
+| `key_finding` | Yellow | Important results and discoveries |
+| `methodology` | Blue   | Methods and experimental design   |
+| `conclusion`  | Green  | Conclusions and implications      |
+| `limitation`  | Orange | Limitations and caveats           |
 
 ## Text Matching
 

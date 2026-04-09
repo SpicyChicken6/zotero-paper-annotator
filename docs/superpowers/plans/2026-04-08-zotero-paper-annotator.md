@@ -49,6 +49,7 @@ zotero-paper-annotator/
 ### Task 1: Project Scaffold
 
 **Files:**
+
 - Clone: zotero-plugin-template into project root
 - Modify: `package.json` (name, description, dependencies)
 - Modify: `addon/manifest.json` (plugin ID, name, version)
@@ -136,6 +137,7 @@ git commit -m "feat: scaffold project from zotero-plugin-template"
 ### Task 2: Preferences Module
 
 **Files:**
+
 - Create: `src/modules/preferences.ts`
 - Modify: `addon/prefs.xhtml` (preferences UI — basic version now, polished in Task 9)
 
@@ -191,9 +193,7 @@ function isConfigured(): boolean {
   return getPref("apiKey").length > 0;
 }
 
-function getColorForCategory(
-  category: string,
-): string {
+function getColorForCategory(category: string): string {
   switch (category) {
     case "key_finding":
       return getPref("colorKeyFinding");
@@ -232,6 +232,7 @@ git commit -m "feat: add preferences module with defaults"
 ### Task 3: Token Estimator & Skip Check
 
 **Files:**
+
 - Create: `src/utils/tokenEstimator.ts`
 - Create: `src/modules/skipCheck.ts`
 
@@ -253,10 +254,7 @@ export function estimateTokens(text: string): number {
 /**
  * Check if text exceeds the given token threshold.
  */
-export function exceedsTokenLimit(
-  text: string,
-  maxTokens: number,
-): boolean {
+export function exceedsTokenLimit(text: string, maxTokens: number): boolean {
   return estimateTokens(text) > maxTokens;
 }
 ```
@@ -273,17 +271,13 @@ const ZPA_TAG = "zpa-annotated";
  */
 export function isAlreadyAnnotated(item: Zotero.Item): boolean {
   const tags = item.getTags();
-  return tags.some(
-    (t: { tag: string }) => t.tag === ZPA_TAG,
-  );
+  return tags.some((t: { tag: string }) => t.tag === ZPA_TAG);
 }
 
 /**
  * Mark a Zotero item as annotated by ZPA.
  */
-export async function markAsAnnotated(
-  item: Zotero.Item,
-): Promise<void> {
+export async function markAsAnnotated(item: Zotero.Item): Promise<void> {
   item.addTag(ZPA_TAG, 0);
   await item.saveTx();
 }
@@ -311,6 +305,7 @@ git commit -m "feat: add token estimator and skip check module"
 ### Task 4: LLM Client Module
 
 **Files:**
+
 - Create: `src/modules/llmClient.ts`
 - Create: `test/llmClient.test.ts`
 
@@ -319,7 +314,11 @@ git commit -m "feat: add token estimator and skip check module"
 ```typescript
 // test/llmClient.test.ts
 import { expect } from "chai";
-import { parseAnnotationResponse, type LLMAnnotation, type LLMResponse } from "../src/modules/llmClient";
+import {
+  parseAnnotationResponse,
+  type LLMAnnotation,
+  type LLMResponse,
+} from "../src/modules/llmClient";
 
 describe("parseAnnotationResponse", () => {
   it("parses a valid response with summary and annotations", () => {
@@ -364,7 +363,9 @@ describe("parseAnnotationResponse", () => {
       summary: "Test",
       annotations: "not an array",
     });
-    expect(() => parseAnnotationResponse(raw)).to.throw("annotations must be an array");
+    expect(() => parseAnnotationResponse(raw)).to.throw(
+      "annotations must be an array",
+    );
   });
 
   it("filters out annotations with invalid category", () => {
@@ -559,6 +560,7 @@ git commit -m "feat: add LLM client with response parsing and tests"
 ### Task 5: PDF Text Extraction Module
 
 **Files:**
+
 - Create: `src/modules/pdfExtractor.ts`
 
 - [ ] **Step 1: Create src/modules/pdfExtractor.ts**
@@ -596,8 +598,7 @@ function getPDFDocument(reader: _ZoteroTypes.ReaderInstance): unknown | null {
   try {
     const iframeWindow = (reader as any)._iframeWindow;
     if (!iframeWindow) return null;
-    const wrappedWindow =
-      iframeWindow.wrappedJSObject || iframeWindow;
+    const wrappedWindow = iframeWindow.wrappedJSObject || iframeWindow;
     const pdfView = wrappedWindow?.PDFViewerApplication?.pdfDocument;
     return pdfView || null;
   } catch {
@@ -626,7 +627,9 @@ async function extractText(
     const textContent = await page.getTextContent();
 
     const items: TextItem[] = textContent.items
-      .filter((item: any) => typeof item.str === "string" && item.str.length > 0)
+      .filter(
+        (item: any) => typeof item.str === "string" && item.str.length > 0,
+      )
       .map((item: any) => {
         const tx = item.transform;
         return {
@@ -680,6 +683,7 @@ git commit -m "feat: add PDF text extraction module"
 ### Task 6: Text Matcher Module
 
 **Files:**
+
 - Create: `src/modules/textMatcher.ts`
 - Create: `test/textMatcher.test.ts`
 
@@ -714,7 +718,11 @@ describe("findQuoteInPage", () => {
     const items = makeItems(["The", "result", "was", "significant"]);
     const pageText = items.map((i) => i.str).join(" ");
 
-    const result = findQuoteInPage("The result  was significant", pageText, items);
+    const result = findQuoteInPage(
+      "The result  was significant",
+      pageText,
+      items,
+    );
     expect(result).to.not.be.null;
   });
 
@@ -882,6 +890,7 @@ git commit -m "feat: add text matcher with fuzzy quote-to-rect mapping and tests
 ### Task 7: Annotator Module
 
 **Files:**
+
 - Create: `src/modules/annotator.ts`
 
 - [ ] **Step 1: Create src/modules/annotator.ts**
@@ -1000,6 +1009,7 @@ git commit -m "feat: add annotator module for creating Zotero highlights and not
 ### Task 8: Pipeline Orchestration
 
 **Files:**
+
 - Create: `src/modules/pipeline.ts`
 - Modify: `src/hooks.ts`
 
@@ -1130,19 +1140,12 @@ import { runPipeline } from "./modules/pipeline";
 let notifierID: string | undefined;
 
 async function onStartup() {
-  await Promise.all([
-    Zotero.initializationPromise,
-    Zotero.unlockPromise,
-  ]);
+  await Promise.all([Zotero.initializationPromise, Zotero.unlockPromise]);
 
   // Register tab notifier to detect PDF opens
   notifierID = Zotero.Notifier.registerObserver(
     {
-      notify: async (
-        event: string,
-        type: string,
-        ids: string[] | number[],
-      ) => {
+      notify: async (event: string, type: string, ids: string[] | number[]) => {
         if (type === "tab" && event === "add") {
           // Small delay to let the reader initialize
           await Zotero.Promise.delay(2000);
@@ -1267,6 +1270,7 @@ git commit -m "feat: wire up pipeline orchestration with tab notifier"
 ### Task 9: Preferences UI
 
 **Files:**
+
 - Create: `addon/prefs.xhtml`
 - Modify: `addon/chrome/locale/en-US/addon.ftl`
 

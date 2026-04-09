@@ -74,14 +74,14 @@ cp .env.example .env
 
 ### Scripts
 
-| Command | Description |
-|---------|-------------|
-| `npm start` | Start dev server with hot reload |
-| `npm run build` | Build for production |
-| `npm run lint:check` | Check formatting and lint rules |
-| `npm run lint:fix` | Auto-fix formatting and lint issues |
-| `npm test` | Run tests |
-| `npm run release` | Create a GitHub release |
+| Command              | Description                         |
+| -------------------- | ----------------------------------- |
+| `npm start`          | Start dev server with hot reload    |
+| `npm run build`      | Build for production                |
+| `npm run lint:check` | Check formatting and lint rules     |
+| `npm run lint:fix`   | Auto-fix formatting and lint issues |
+| `npm test`           | Run tests                           |
+| `npm run release`    | Create a GitHub release             |
 
 ### Project Structure
 

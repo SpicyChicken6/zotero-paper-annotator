@@ -36,10 +36,7 @@ function loadPrefsValues() {
     `zotero-prefpane-${config.addonRef}-apiBaseUrl`,
     getPref("apiBaseUrl"),
   );
-  setVal(
-    `zotero-prefpane-${config.addonRef}-modelName`,
-    getPref("modelName"),
-  );
+  setVal(`zotero-prefpane-${config.addonRef}-modelName`, getPref("modelName"));
   setVal(
     `zotero-prefpane-${config.addonRef}-maxTokenThreshold`,
     String(getPref("maxTokenThreshold")),
@@ -78,11 +75,7 @@ function bindPrefEvents() {
     });
   };
 
-  bindInput(
-    `zotero-prefpane-${config.addonRef}-apiKey`,
-    "apiKey",
-    "string",
-  );
+  bindInput(`zotero-prefpane-${config.addonRef}-apiKey`, "apiKey", "string");
   bindInput(
     `zotero-prefpane-${config.addonRef}-apiBaseUrl`,
     "apiBaseUrl",

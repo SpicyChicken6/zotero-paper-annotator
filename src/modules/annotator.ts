@@ -67,7 +67,8 @@ async function createAnnotations(
       annotation.parentID = attachmentID;
       (annotation as any).annotationType = "highlight";
       (annotation as any).annotationText = ann.quote;
-      (annotation as any).annotationComment = `[${escapeHtml(ann.category)}] ${escapeHtml(ann.note)}`;
+      (annotation as any).annotationComment =
+        `[${escapeHtml(ann.category)}] ${escapeHtml(ann.note)}`;
       (annotation as any).annotationColor = getColorForCategory(ann.category);
       // rects are in PDF user space coordinates [x1, y1, x2, y2] from PDF.js
       (annotation as any).annotationPosition = JSON.stringify({

@@ -8,10 +8,10 @@ type Rect = [number, number, number, number]; // [x1, y1, x2, y2]
 function normalize(text: string): string {
   return text
     .normalize("NFKC")
-    .replace(/[\u2018\u2019\u201A\u2039\u203A]/g, "'")   // smart single quotes → straight
-    .replace(/[\u201C\u201D\u201E\u00AB\u00BB]/g, '"')    // smart double quotes → straight
-    .replace(/[\u2013\u2014]/g, "-")                       // en-dash, em-dash → hyphen
-    .replace(/[\u2026]/g, "...")                            // ellipsis → three dots
+    .replace(/[\u2018\u2019\u201A\u2039\u203A]/g, "'") // smart single quotes → straight
+    .replace(/[\u201C\u201D\u201E\u00AB\u00BB]/g, '"') // smart double quotes → straight
+    .replace(/[\u2013\u2014]/g, "-") // en-dash, em-dash → hyphen
+    .replace(/[\u2026]/g, "...") // ellipsis → three dots
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
@@ -22,15 +22,17 @@ function normalize(text: string): string {
  * Uses a two-row optimization for memory efficiency.
  */
 function levenshteinDistance(a: string, b: string): number {
-  const m = a.length, n = b.length;
+  const m = a.length,
+    n = b.length;
   let prev = Array.from({ length: n + 1 }, (_, i) => i);
   let curr = new Array(n + 1);
   for (let i = 1; i <= m; i++) {
     curr[0] = i;
     for (let j = 1; j <= n; j++) {
-      curr[j] = a[i - 1] === b[j - 1]
-        ? prev[j - 1]
-        : 1 + Math.min(prev[j - 1], prev[j], curr[j - 1]);
+      curr[j] =
+        a[i - 1] === b[j - 1]
+          ? prev[j - 1]
+          : 1 + Math.min(prev[j - 1], prev[j], curr[j - 1]);
     }
     [prev, curr] = [curr, prev];
   }
@@ -71,7 +73,7 @@ function findQuoteInPage(
         if (dist < bestDist) {
           bestDist = dist;
           bestPos = i;
-          if (dist === 0) break;  // exact match found
+          if (dist === 0) break; // exact match found
         }
       }
       if (bestPos >= 0 && bestDist <= maxDist) {

@@ -46,7 +46,11 @@ Rules:
 function parseAnnotationResponse(raw: string): LLMResponse {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(raw);
+    let cleaned = raw.trim();
+    if (cleaned.startsWith("```")) {
+      cleaned = cleaned.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "");
+    }
+    parsed = JSON.parse(cleaned);
   } catch {
     throw new Error(`Invalid JSON in LLM response: ${raw.slice(0, 100)}`);
   }
@@ -89,24 +93,41 @@ async function callLLM(paperText: string): Promise<LLMResponse> {
   const baseUrl = getPref("apiBaseUrl");
   const model = getPref("modelName");
 
+  if (!/^https:\/\/|^http:\/\/localhost/.test(baseUrl as string)) {
+    throw new Error(`Invalid API base URL: must start with https:// or http://localhost. Got: ${baseUrl}`);
+  }
+
   const url = `${baseUrl}/v1/chat/completions`;
 
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: paperText },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.1,
-    }),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120_000);
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: paperText },
+        ],
+        response_format: { type: "json_object" },
+        temperature: 0.1,
+      }),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err instanceof DOMException && err.name === "AbortError") {
+      throw new Error("LLM request timed out after 120 seconds");
+    }
+    throw err;
+  }
 
   if (!response.ok) {
     const errorText = await response.text();

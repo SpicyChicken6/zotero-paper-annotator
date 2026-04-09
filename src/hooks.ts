@@ -23,17 +23,27 @@ async function onStartup() {
         ids: Array<string | number>,
       ) => {
         if (type === "tab" && event === "add") {
-          // Delay to let the reader fully initialize
-          await Zotero.Promise.delay(3000);
-
           for (const id of ids) {
-            const reader = Zotero.Reader.getByTabID(String(id));
-            if (reader) {
-              try {
-                await runPipeline(reader);
-              } catch (err) {
-                Zotero.debug(`[ZPA] Pipeline error: ${err}`);
-              }
+            // Poll until the reader is fully initialized
+            let reader = null;
+            for (let attempt = 0; attempt < 20; attempt++) {
+              reader = Zotero.Reader.getByTabID(String(id));
+              if (
+                (reader as any)?._internalReader?._primaryView?._iframe
+                  ?.contentWindow
+              )
+                break;
+              reader = null;
+              await Zotero.Promise.delay(500);
+            }
+            if (!reader) {
+              ztoolkit.log("ZPA: Reader not ready after 10s, skipping");
+              continue;
+            }
+            try {
+              await runPipeline(reader);
+            } catch (err) {
+              Zotero.debug(`[ZPA] Pipeline error: ${err}`);
             }
           }
         }
@@ -74,16 +84,6 @@ function onShutdown(): void {
   Zotero.debug("[ZPA] Plugin shut down");
 }
 
-async function onNotify(
-  event: string,
-  type: string,
-  ids: Array<string | number>,
-  extraData: { [key: string]: any },
-) {
-  // Tab events are handled by the notifier registered in onStartup
-  ztoolkit.log("notify", event, type, ids, extraData);
-}
-
 async function onPrefsEvent(type: string, data: { [key: string]: any }) {
   switch (type) {
     case "load":
@@ -99,6 +99,5 @@ export default {
   onShutdown,
   onMainWindowLoad,
   onMainWindowUnload,
-  onNotify,
   onPrefsEvent,
 };

@@ -62,10 +62,7 @@ function bindPrefEvents() {
     const el = doc.querySelector(`#${id}`);
     if (!el) return;
 
-    const eventType =
-      el instanceof HTMLInputElement && el.type === "checkbox"
-        ? "change"
-        : "change";
+    const eventType = "change";
 
     el.addEventListener(eventType, (e: Event) => {
       const target = e.target as HTMLInputElement;

@@ -1,7 +1,7 @@
 import type { LLMResponse } from "./llmClient";
-import type { ExtractionResult } from "./pdfExtractor";
+import type { ExtractionResult, ParagraphText, PageText } from "./pdfExtractor";
 import { findQuoteInPage } from "./textMatcher";
-import { markAsAnnotated } from "./skipCheck";
+import { markAsAnnotated, ZPA_TAG } from "./skipCheck";
 import { getPref } from "../utils/prefs";
 
 const CATEGORY_COLORS: Record<string, () => string> = {
@@ -120,6 +120,49 @@ interface AnnotationResult {
   summaryNoteCreated: boolean;
 }
 
+interface AnnotationTarget {
+  pageIndex: number;
+  pageLabel: string;
+  text: string;
+  items: PageText["items"];
+}
+
+function targetFromParagraph(paragraph: ParagraphText): AnnotationTarget {
+  return {
+    pageIndex: paragraph.pageIndex,
+    pageLabel: paragraph.pageLabel,
+    text: paragraph.text,
+    items: paragraph.items,
+  };
+}
+
+function targetFromPage(page: PageText): AnnotationTarget {
+  return {
+    pageIndex: page.pageIndex,
+    pageLabel: page.pageLabel,
+    text: page.text,
+    items: page.items,
+  };
+}
+
+function findAnnotationTarget(
+  ann: LLMResponse["annotations"][number],
+  extraction: ExtractionResult,
+): AnnotationTarget | null {
+  if (ann.paragraphId) {
+    const paragraph = extraction.paragraphs.find(
+      (candidate) => candidate.id === ann.paragraphId,
+    );
+    if (paragraph) {
+      return targetFromParagraph(paragraph);
+    }
+  }
+
+  const pageIndex = ann.page - 1;
+  const page = extraction.pages.find((candidate) => candidate.pageIndex === pageIndex);
+  return page ? targetFromPage(page) : null;
+}
+
 /**
  * Create Zotero highlight annotations from LLM output.
  */
@@ -129,6 +172,7 @@ async function createAnnotations(
   extraction: ExtractionResult,
   llmResponse: LLMResponse,
   annotatedItem: Zotero.Item = item,
+  stateTag: string = ZPA_TAG,
 ): Promise<AnnotationResult> {
   let created = 0;
   let skipped = 0;
@@ -142,21 +186,21 @@ async function createAnnotations(
   }
 
   for (const ann of llmResponse.annotations) {
-    // Pages in LLM response are 1-indexed, pageIndex is 0-indexed
-    const pageIndex = ann.page - 1;
-    const page = extraction.pages.find((p) => p.pageIndex === pageIndex);
+    const target = findAnnotationTarget(ann, extraction);
 
-    if (!page) {
+    if (!target) {
       skipped++;
-      Zotero.debug(`[ZPA] Page ${ann.page} not found, skipping annotation`);
+      Zotero.debug(
+        `[ZPA] Target not found for annotation ${ann.paragraphId ?? `page ${ann.page}`}, skipping annotation`,
+      );
       continue;
     }
 
-    const rects = findQuoteInPage(ann.quote, page.text, page.items);
+    const rects = findQuoteInPage(ann.quote, target.text, target.items);
     if (!rects || rects.length === 0) {
       skipped++;
       Zotero.debug(
-        `[ZPA] Quote not found on page ${ann.page}: "${ann.quote.slice(0, 50)}..."`,
+        `[ZPA] Quote not found for ${ann.paragraphId ?? `page ${ann.page}`}: "${ann.quote.slice(0, 50)}..."`,
       );
       continue;
     }
@@ -168,10 +212,10 @@ async function createAnnotations(
         text: ann.quote,
         comment: `[${escapeHtml(ann.category)}] ${escapeHtml(ann.note)}`,
         color: getColorForCategory(ann.category),
-        pageLabel: page.pageLabel,
-        sortIndex: buildPdfSortIndex(pageIndex, rects, created + skipped),
+        pageLabel: target.pageLabel,
+        sortIndex: buildPdfSortIndex(target.pageIndex, rects, created + skipped),
         position: {
-          pageIndex,
+          pageIndex: target.pageIndex,
           rects,
         },
       };
@@ -200,7 +244,7 @@ async function createAnnotations(
     created > 0 ||
     (llmResponse.annotations.length === 0 && summaryNoteHandled)
   ) {
-    await markAsAnnotated(annotatedItem);
+    await markAsAnnotated(annotatedItem, stateTag);
   }
 
   return { created, skipped, summaryNoteCreated };

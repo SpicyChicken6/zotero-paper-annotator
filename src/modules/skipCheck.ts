@@ -1,11 +1,15 @@
 const ZPA_TAG = "zpa-annotated";
+const ZPA_PARAGRAPH_TAG = "zpa-paragraph-summarized";
 
 /**
  * Check if a Zotero item has already been annotated by ZPA.
  */
-export function isAlreadyAnnotated(item: Zotero.Item): boolean {
+export function isAlreadyAnnotated(
+  item: Zotero.Item,
+  tag: string = ZPA_TAG,
+): boolean {
   const tags = item.getTags();
-  const hasZpaTag = tags.some((t: { tag: string }) => t.tag === ZPA_TAG);
+  const hasZpaTag = tags.some((t: { tag: string }) => t.tag === tag);
   if (!hasZpaTag) {
     return false;
   }
@@ -20,9 +24,12 @@ export function isAlreadyAnnotated(item: Zotero.Item): boolean {
 /**
  * Mark a Zotero item as annotated by ZPA.
  */
-export async function markAsAnnotated(item: Zotero.Item): Promise<void> {
-  item.addTag(ZPA_TAG, 0);
+export async function markAsAnnotated(
+  item: Zotero.Item,
+  tag: string = ZPA_TAG,
+): Promise<void> {
+  item.addTag(tag, 0);
   await item.saveTx();
 }
 
-export { ZPA_TAG };
+export { ZPA_PARAGRAPH_TAG, ZPA_TAG };

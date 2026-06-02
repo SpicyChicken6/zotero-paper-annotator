@@ -5,15 +5,17 @@ import {
 } from "../src/modules/annotator.ts";
 import type { LLMResponse } from "../src/modules/llmClient.ts";
 import type { ExtractionResult } from "../src/modules/pdfExtractor.ts";
-import { ZPA_TAG } from "../src/modules/skipCheck.ts";
+import { ZPA_PARAGRAPH_TAG, ZPA_TAG } from "../src/modules/skipCheck.ts";
 
 describe("createAnnotations", function () {
   let previousZotero: typeof Zotero | undefined;
   let parentItem: Zotero.Item | undefined;
+  let savedAnnotations: any[];
 
   beforeEach(function () {
     previousZotero = globalThis.Zotero;
-    installFakeZotero();
+    savedAnnotations = [];
+    installFakeZotero(savedAnnotations);
   });
 
   afterEach(async function () {
@@ -74,9 +76,76 @@ describe("createAnnotations", function () {
     assert.lengthOf(noteIDs, 1);
     assert.include(summaryNote.getNote(), "Updated summary text.");
   });
+
+  it("matches paragraph-ID annotations against paragraph text and marks the paragraph tag", async function () {
+    parentItem = new Zotero.Item("journalArticle");
+    parentItem.setField("title", "ZPA paragraph annotation regression");
+    await parentItem.saveTx();
+
+    const attachment = new Zotero.Item("attachment");
+    await attachment.saveTx();
+
+    const paragraphItems = [
+      { str: "The", x: 1, y: 2, width: 3, height: 2 },
+      { str: "important", x: 5, y: 2, width: 9, height: 2 },
+      { str: "method", x: 15, y: 2, width: 6, height: 2 },
+      { str: "works.", x: 22, y: 2, width: 6, height: 2 },
+    ];
+    const paragraph = {
+      id: "p0001",
+      pageIndex: 0,
+      pageLabel: "1",
+      indexOnPage: 0,
+      text: "The important method works.",
+      items: paragraphItems,
+    };
+    const extraction: ExtractionResult = {
+      fullText: "",
+      pages: [
+        {
+          pageIndex: 0,
+          pageLabel: "1",
+          text: paragraph.text,
+          items: paragraphItems,
+          paragraphs: [paragraph],
+        },
+      ],
+      paragraphs: [paragraph],
+    };
+    const response: LLMResponse = {
+      summary: "The paper introduces a method.",
+      annotations: [
+        {
+          paragraphId: "p0001",
+          page: 99,
+          quote: "important method",
+          category: "methodology",
+          note: "This paragraph summarizes the core method.",
+        },
+      ],
+    };
+
+    const result = await createAnnotations(
+      parentItem,
+      attachment.id,
+      extraction,
+      response,
+      attachment,
+      ZPA_PARAGRAPH_TAG,
+    );
+
+    assert.equal(result.created, 1);
+    assert.lengthOf(savedAnnotations, 1);
+    assert.equal(savedAnnotations[0].text, "important method");
+    assert.equal(savedAnnotations[0].pageLabel, "1");
+    assert.deepEqual(savedAnnotations[0].position.pageIndex, 0);
+    assert.isTrue(
+      attachment.getTags().some((tag) => tag.tag === ZPA_PARAGRAPH_TAG),
+    );
+  });
 });
 
-function installFakeZotero(): void {
+function installFakeZotero(savedAnnotations: any[]): void {
   let nextItemID = 1;
   const items = new Map<number, FakeItem>();
 
@@ -146,6 +215,25 @@ function installFakeZotero(): void {
     Item: FakeItem,
     Items: {
       getAsync: async (itemID: number) => items.get(itemID),
+    },
+    DataObjectUtilities: {
+      generateKey: () => "ABCD1234",
+    },
+    Utilities: {
+      randomString: () => "RANDOM12",
+    },
+    Annotations: {
+      saveFromJSON: async (_attachment: FakeItem, annotationJSON: any) => {
+        savedAnnotations.push(annotationJSON);
+      },
+    },
+    Prefs: {
+      get: (key: string) => {
+        if (key.endsWith("colorMethodology")) return "#2ea8e5";
+        if (key.endsWith("colorConclusion")) return "#5fb236";
+        if (key.endsWith("colorLimitation")) return "#f19837";
+        return "#ffd400";
+      },
     },
     debug: () => undefined,
   } as unknown as typeof Zotero;

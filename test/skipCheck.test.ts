@@ -1,5 +1,9 @@
 import { assert } from "chai";
-import { isAlreadyAnnotated, ZPA_TAG } from "../src/modules/skipCheck.ts";
+import {
+  isAlreadyAnnotated,
+  ZPA_PARAGRAPH_TAG,
+  ZPA_TAG,
+} from "../src/modules/skipCheck.ts";
 
 function itemWithTagsAndAnnotations(
   tags: Array<{ tag: string }>,
@@ -31,5 +35,11 @@ describe("isAlreadyAnnotated", function () {
     const item = itemWithTagsAndAnnotations([{ tag: ZPA_TAG }]);
 
     assert.isTrue(isAlreadyAnnotated(item));
+  });
+
+  it("does not let the old selective tag satisfy paragraph-summary completion", function () {
+    const item = itemWithTagsAndAnnotations([{ tag: ZPA_TAG }], 2);
+
+    assert.isFalse(isAlreadyAnnotated(item, ZPA_PARAGRAPH_TAG));
   });
 });

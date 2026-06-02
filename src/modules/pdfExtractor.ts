@@ -6,16 +6,27 @@ interface TextItem {
   height: number;
 }
 
+interface ParagraphText {
+  id: string;
+  pageIndex: number;
+  pageLabel: string;
+  indexOnPage: number;
+  text: string;
+  items: TextItem[];
+}
+
 interface PageText {
   pageIndex: number;
   pageLabel: string;
   text: string;
   items: TextItem[];
+  paragraphs: ParagraphText[];
 }
 
 interface ExtractionResult {
   fullText: string;
   pages: PageText[];
+  paragraphs: ParagraphText[];
 }
 
 interface PDFDocumentContext {
@@ -113,17 +124,72 @@ function rectToTextItem(
   };
 }
 
-function textItemsFromZoteroPageData(pageData: ZoteroPageData): TextItem[] {
+function paragraphID(paragraphNumber: number): string {
+  return `p${String(paragraphNumber).padStart(4, "0")}`;
+}
+
+function buildParagraph(
+  items: TextItem[],
+  startIndex: number,
+  pageIndex: number,
+  pageLabel: string,
+  indexOnPage: number,
+  paragraphNumber: number,
+): ParagraphText | null {
+  const paragraphItems = items.slice(startIndex);
+  if (paragraphItems.length === 0) {
+    return null;
+  }
+
+  return {
+    id: paragraphID(paragraphNumber),
+    pageIndex,
+    pageLabel,
+    indexOnPage,
+    text: paragraphItems.map((item) => item.str).join(" "),
+    items: paragraphItems,
+  };
+}
+
+function textItemsAndParagraphsFromZoteroPageData(
+  pageData: ZoteroPageData,
+  pageIndex: number,
+  pageLabel: string,
+  firstParagraphNumber: number,
+): { items: TextItem[]; paragraphs: ParagraphText[] } {
   const items: TextItem[] = [];
+  const paragraphs: ParagraphText[] = [];
   let currentText = "";
   let currentRect: [number, number, number, number] | null = null;
+  let paragraphStartIndex = 0;
+  let paragraphNumber = firstParagraphNumber;
+  let indexOnPage = 0;
 
-  const flush = () => {
+  const flushWord = () => {
     if (currentText.length > 0 && currentRect) {
       items.push(rectToTextItem(currentText, currentRect));
     }
     currentText = "";
     currentRect = null;
+  };
+
+  const flushParagraph = () => {
+    flushWord();
+    const paragraph = buildParagraph(
+      items,
+      paragraphStartIndex,
+      pageIndex,
+      pageLabel,
+      indexOnPage,
+      paragraphNumber,
+    );
+    paragraphStartIndex = items.length;
+
+    if (paragraph) {
+      paragraphs.push(paragraph);
+      paragraphNumber++;
+      indexOnPage++;
+    }
   };
 
   for (const char of pageData.chars ?? []) {
@@ -141,12 +207,19 @@ function textItemsFromZoteroPageData(pageData: ZoteroPageData): TextItem[] {
     currentRect = currentRect ? unionRect(currentRect, rect) : rect;
 
     if (char.spaceAfter || char.lineBreakAfter || char.paragraphBreakAfter) {
-      flush();
+      flushWord();
+    }
+    if (char.paragraphBreakAfter) {
+      flushParagraph();
     }
   }
-  flush();
+  flushParagraph();
 
-  return items;
+  return { items, paragraphs };
+}
+
+function textItemsFromZoteroPageData(pageData: ZoteroPageData): TextItem[] {
+  return textItemsAndParagraphsFromZoteroPageData(pageData, 0, "1", 1).items;
 }
 
 async function getPageLabels(pdfDocument: any, numPages: number) {
@@ -167,6 +240,7 @@ async function extractPageViaZoteroPageData(
   iframeWindow: any,
   pageIndex: number,
   pageLabel: string,
+  firstParagraphNumber: number,
 ): Promise<PageText | null> {
   if (typeof pdfDocument.getPageData !== "function") {
     return null;
@@ -175,7 +249,12 @@ async function extractPageViaZoteroPageData(
   const pageData = await pdfDocument.getPageData(
     cloneIntoReaderWindow({ pageIndex }, iframeWindow),
   );
-  const items = textItemsFromZoteroPageData(pageData);
+  const { items, paragraphs } = textItemsAndParagraphsFromZoteroPageData(
+    pageData,
+    pageIndex,
+    pageLabel,
+    firstParagraphNumber,
+  );
   const text = items.map((item) => item.str).join(" ");
 
   return {
@@ -183,6 +262,7 @@ async function extractPageViaZoteroPageData(
     pageLabel,
     text,
     items,
+    paragraphs,
   };
 }
 
@@ -190,6 +270,7 @@ async function extractPageViaPDFJS(
   pdfDocument: any,
   pageIndex: number,
   pageLabel: string,
+  firstParagraphNumber: number,
 ): Promise<PageText> {
   const page = await pdfDocument.getPage(pageIndex + 1);
   const textContent = await page.getTextContent();
@@ -206,12 +287,21 @@ async function extractPageViaPDFJS(
         height: item.height,
       };
     });
+  const paragraph = buildParagraph(
+    items,
+    0,
+    pageIndex,
+    pageLabel,
+    0,
+    firstParagraphNumber,
+  );
 
   return {
     pageIndex,
     pageLabel,
     text: items.map((item) => item.str).join(" "),
     items,
+    paragraphs: paragraph ? [paragraph] : [],
   };
 }
 
@@ -230,6 +320,7 @@ async function extractText(
   const numPages: number = pdfDocument.numPages;
   const pageLabels = await getPageLabels(pdfDocument, numPages);
   const pages: PageText[] = [];
+  const paragraphs: ParagraphText[] = [];
   const fullTextParts: string[] = [];
 
   for (let i = 0; i < numPages; i++) {
@@ -240,17 +331,25 @@ async function extractText(
         iframeWindow,
         i,
         pageLabel,
-      )) ?? (await extractPageViaPDFJS(pdfDocument, i, pageLabel));
+        paragraphs.length + 1,
+      )) ?? (await extractPageViaPDFJS(
+        pdfDocument,
+        i,
+        pageLabel,
+        paragraphs.length + 1,
+      ));
 
     pages.push(page);
+    paragraphs.push(...page.paragraphs);
     fullTextParts.push(`[Page ${pageLabel}]\n${page.text}`);
   }
 
   return {
     fullText: fullTextParts.join("\n\n"),
     pages,
+    paragraphs,
   };
 }
 
 export { extractText, getPDFDocument, textItemsFromZoteroPageData };
-export type { TextItem, PageText, ExtractionResult };
+export type { TextItem, ParagraphText, PageText, ExtractionResult };

@@ -82,7 +82,83 @@ describe("pdfExtractor", function () {
         { str: "Main", x: 1, y: 2, width: 4, height: 2 },
         { str: "result", x: 7, y: 2, width: 6, height: 2 },
       ],
+      paragraphs: [
+        {
+          id: "p0001",
+          pageIndex: 0,
+          pageLabel: "iii",
+          indexOnPage: 0,
+          text: "Main result",
+          items: [
+            { str: "Main", x: 1, y: 2, width: 4, height: 2 },
+            { str: "result", x: 7, y: 2, width: 6, height: 2 },
+          ],
+        },
+      ],
     });
+  });
+
+  it("groups Zotero 9 page character data into stable paragraphs", async function () {
+    const pdfDocument = {
+      numPages: 1,
+      getPageData: async () => ({
+        chars: [
+          { c: "F", inlineRect: [1, 2, 2, 4] },
+          { c: "i", inlineRect: [2, 2, 3, 4] },
+          { c: "r", inlineRect: [3, 2, 4, 4] },
+          { c: "s", inlineRect: [4, 2, 5, 4] },
+          { c: "t", inlineRect: [5, 2, 6, 4], spaceAfter: true },
+          { c: "p", inlineRect: [8, 2, 9, 4] },
+          { c: "a", inlineRect: [9, 2, 10, 4] },
+          { c: "r", inlineRect: [10, 2, 11, 4] },
+          { c: "a", inlineRect: [11, 2, 12, 4] },
+          { c: ".", inlineRect: [12, 2, 13, 4], paragraphBreakAfter: true },
+          { c: "S", inlineRect: [1, 8, 2, 10] },
+          { c: "e", inlineRect: [2, 8, 3, 10] },
+          { c: "c", inlineRect: [3, 8, 4, 10] },
+          { c: "o", inlineRect: [4, 8, 5, 10] },
+          { c: "n", inlineRect: [5, 8, 6, 10] },
+          { c: "d", inlineRect: [6, 8, 7, 10], spaceAfter: true },
+          { c: "p", inlineRect: [9, 8, 10, 10] },
+          { c: "a", inlineRect: [10, 8, 11, 10] },
+          { c: "r", inlineRect: [11, 8, 12, 10] },
+          { c: "a", inlineRect: [12, 8, 13, 10] },
+          { c: ".", inlineRect: [13, 8, 14, 10] },
+        ],
+      }),
+    };
+
+    const result = await extractText(readerForDocument(pdfDocument));
+
+    assert.deepEqual(
+      result.paragraphs.map((paragraph) => ({
+        id: paragraph.id,
+        pageLabel: paragraph.pageLabel,
+        indexOnPage: paragraph.indexOnPage,
+        text: paragraph.text,
+        itemTexts: paragraph.items.map((item) => item.str),
+      })),
+      [
+        {
+          id: "p0001",
+          pageLabel: "1",
+          indexOnPage: 0,
+          text: "First para.",
+          itemTexts: ["First", "para."],
+        },
+        {
+          id: "p0002",
+          pageLabel: "1",
+          indexOnPage: 1,
+          text: "Second para.",
+          itemTexts: ["Second", "para."],
+        },
+      ],
+    );
+    assert.deepEqual(
+      result.pages[0].paragraphs.map((paragraph) => paragraph.id),
+      ["p0001", "p0002"],
+    );
   });
 
   it("clones getPageData arguments into the reader iframe compartment", async function () {

@@ -1,6 +1,6 @@
 # Zotero Paper Annotator
 
-A Zotero 7 plugin that automatically annotates academic papers with LLM-powered highlights and summaries. When you open a PDF, the plugin extracts the text, sends it to OpenRouter by default (or another OpenAI-compatible endpoint), and creates color-coded highlight annotations directly on the PDF.
+A Zotero 9 plugin that automatically annotates academic papers with LLM-powered highlights and summaries. When you open a PDF, the plugin extracts the text, sends it to OpenRouter by default (or another OpenAI-compatible endpoint), and creates color-coded highlight annotations directly on the PDF.
 
 ## Features
 
@@ -11,19 +11,19 @@ A Zotero 7 plugin that automatically annotates academic papers with LLM-powered 
   - Conclusions (green)
   - Limitations (orange)
 - **Summary note** -- a concise summary is added as a note on the parent item
-- **Smart skip** -- papers that have already been annotated are skipped automatically
+- **Smart skip** -- papers with saved ZPA annotations are skipped automatically, while tag-only failed runs can retry
 - **Fuzzy text matching** -- quotes are matched to PDF positions using Unicode normalization and Levenshtein distance fallback
 - **Configurable** -- API endpoint, model, token limits, and auto-annotate toggle are all adjustable in preferences
 - **OpenRouter-first, OpenAI-compatible** -- defaults to OpenRouter while keeping the endpoint and model configurable for other providers that support chat completions
 
 ## Requirements
 
-- Zotero 7 or later
+- Zotero 9.0.x (tested with Zotero 9.0.4)
 - An API key from [OpenRouter](https://openrouter.ai/) (or another OpenAI-compatible provider)
 
 ## Installation
 
-1. Download the latest `.xpi` file from the [Releases](https://github.com/SpicyChicken6/zotero-paper-annotator/releases) page
+1. Download the latest `.xpi` file from the [Releases](https://github.com/SpicyChicken6/zotero-paper-annotator/releases) page, or use the checked-in local build at `release/zotero-paper-annotator.xpi`
 2. In Zotero, go to **Tools > Add-ons**
 3. Click the gear icon and select **Install Add-on From File...**
 4. Select the downloaded `.xpi` file
@@ -57,7 +57,7 @@ To re-annotate a paper, remove the `zpa-annotated` tag from the item and reopen 
 ### Prerequisites
 
 - [Node.js](https://nodejs.org/) (LTS)
-- [Zotero 7](https://www.zotero.org/support/beta_builds) installed locally
+- Zotero 9.0.x installed locally
 
 ### Setup
 
@@ -76,14 +76,15 @@ cp .env.example .env
 
 ### Scripts
 
-| Command              | Description                         |
-| -------------------- | ----------------------------------- |
-| `npm start`          | Start dev server with hot reload    |
-| `npm run build`      | Build for production                |
-| `npm run lint:check` | Check formatting and lint rules     |
-| `npm run lint:fix`   | Auto-fix formatting and lint issues |
-| `npm test`           | Run tests                           |
-| `npm run release`    | Create a GitHub release             |
+| Command                 | Description                                              |
+| ----------------------- | -------------------------------------------------------- |
+| `npm start`             | Start dev server with hot reload                         |
+| `npm run build`         | Build for production                                     |
+| `npm run build:release` | Build and copy the installable XPI into `release/`       |
+| `npm run lint:check`    | Check formatting and lint rules                          |
+| `npm run lint:fix`      | Auto-fix formatting and lint issues                      |
+| `npm test`              | Run the Zotero scaffold test harness                     |
+| `npm run release`       | Create a GitHub release with the Zotero scaffold tooling |
 
 ### Project Structure
 
@@ -95,7 +96,7 @@ src/
   modules/
     pipeline.ts             # Main orchestration flow
     llmClient.ts            # OpenRouter/OpenAI-compatible API client
-    pdfExtractor.ts         # PDF.js text extraction with coordinates
+    pdfExtractor.ts         # Zotero 9 reader text extraction with PDF.js fallback
     annotator.ts            # Zotero annotation creation
     textMatcher.ts          # Fuzzy quote-to-position matching
     skipCheck.ts            # Already-annotated detection
@@ -127,7 +128,7 @@ hooks.ts: tab notifier fires
         ▼
 pipeline.ts: runPipeline(reader)
         │
-        ├── skipCheck.isAlreadyAnnotated() ──► skip if tagged
+        ├── skipCheck.isAlreadyAnnotated() ──► skip if tagged and annotations exist
         │
         ├── pdfExtractor.extractText(reader) ──► { fullText, pages[] }
         │

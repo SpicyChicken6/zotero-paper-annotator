@@ -16,6 +16,7 @@ const JSON_MODE_HELP =
   "If using OpenRouter, choose a model that supports JSON response_format; support varies by model.";
 
 interface LLMAnnotation {
+  paragraphId?: string;
   page: number;
   quote: string;
   category: AnnotationCategory;
@@ -27,25 +28,27 @@ interface LLMResponse {
   annotations: LLMAnnotation[];
 }
 
-const SYSTEM_PROMPT = `You are an expert academic paper annotator. Given the full text of an academic paper, identify the most important passages and provide a structured analysis.
+const SYSTEM_PROMPT = `You are an expert academic paper annotator. The user message contains substantial paragraphs from one academic paper in paper order. Each paragraph starts with a stable ID such as [Paragraph p0001 | Page 1]. Summarize each provided paragraph in whole-paper context.
 
 Return a JSON object with exactly this structure:
 {
-  "summary": "A 2-3 sentence overall summary of the paper's main contribution and findings.",
+  "summary": "A 2-3 sentence whole-paper summary of the paper's main contribution and findings.",
   "annotations": [
     {
+      "paragraphId": "<exact paragraph ID, for example p0001>",
       "page": <page number as integer>,
-      "quote": "<exact text from the paper to highlight — must be a verbatim substring>",
+      "quote": "<short exact text from that paragraph to highlight — must be a verbatim substring>",
       "category": "<one of: key_finding, methodology, conclusion, limitation>",
-      "note": "<1-2 sentence explanation of why this passage is important>"
+      "note": "<1-2 sentence summary of this paragraph in whole-paper context>"
     }
   ]
 }
 
 Rules:
-- The "quote" field MUST be an exact, verbatim substring from the paper text. Do not paraphrase.
-- Keep quotes to 1-3 sentences. Do not quote entire paragraphs.
-- Include 10-20 annotations covering the most important passages.
+- Include one annotation for every paragraph provided by the user. Do not skip provided paragraphs.
+- The "paragraphId" field MUST exactly match the ID shown in the user message.
+- The "quote" field MUST be an exact, verbatim substring from that paragraph. Do not paraphrase quotes.
+- Keep quotes to 1 sentence when possible. Do not quote entire paragraphs.
 - Categories: key_finding (important results), methodology (methods/design), conclusion (implications), limitation (caveats/limitations).
 - Return ONLY valid JSON. No markdown, no explanation outside the JSON.`;
 
@@ -80,10 +83,13 @@ function parseAnnotationResponse(raw: string): LLMResponse {
         typeof a.quote === "string" &&
         typeof a.category === "string" &&
         typeof a.note === "string" &&
+        (typeof a.paragraphId === "undefined" ||
+          typeof a.paragraphId === "string") &&
         (VALID_CATEGORIES as readonly string[]).includes(a.category)
       );
     })
     .map((a: Record<string, unknown>) => ({
+      paragraphId: a.paragraphId as string | undefined,
       page: a.page as number,
       quote: a.quote as string,
       category: a.category as AnnotationCategory,

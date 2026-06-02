@@ -1,6 +1,7 @@
 import { assert } from "chai";
 import { config } from "../package.json";
 import { registerPrefsScripts } from "../src/modules/preferenceScript.ts";
+import { DEFAULT_PREFS } from "../src/utils/prefs.ts";
 import { DEFAULT_MAX_TOKEN_THRESHOLD } from "../src/utils/tokenEstimator.ts";
 
 type Listener = (event: { target: FakeControl }) => void;
@@ -147,6 +148,34 @@ describe("preferenceScript", function () {
     assert.equal(prefsWindow.controls.maxTokenThreshold.value, "42000");
     assert.equal(prefsWindow.controls.minParagraphChars.value, "180");
     assert.isTrue(prefsWindow.controls.autoAnnotate.checked);
+  });
+
+  it("loads code defaults when Zotero has not materialized default prefs", async function () {
+    const prefsWindow = createPrefsWindow();
+    installPrefs(prefsWindow);
+    prefsWindow.prefs.clear();
+    prefsWindow.prefs.set(`${config.prefsPrefix}.apiKey`, "sk-current");
+
+    await registerPrefsScripts(prefsWindow.window as unknown as Window);
+
+    assert.equal(prefsWindow.controls.apiKey.value, "sk-current");
+    assert.equal(
+      prefsWindow.controls.apiBaseUrl.value,
+      DEFAULT_PREFS.apiBaseUrl,
+    );
+    assert.equal(prefsWindow.controls.modelName.value, DEFAULT_PREFS.modelName);
+    assert.equal(
+      prefsWindow.controls.maxTokenThreshold.value,
+      String(DEFAULT_PREFS.maxTokenThreshold),
+    );
+    assert.equal(
+      prefsWindow.controls.minParagraphChars.value,
+      String(DEFAULT_PREFS.minParagraphChars),
+    );
+    assert.equal(
+      prefsWindow.controls.autoAnnotate.checked,
+      DEFAULT_PREFS.autoAnnotate,
+    );
   });
 
   it("does not add duplicate listeners when the same pane loads twice", async function () {

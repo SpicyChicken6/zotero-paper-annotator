@@ -2,6 +2,7 @@ pref("apiKey", "");
 pref("apiBaseUrl", "https://openrouter.ai/api");
 pref("modelName", "deepseek/deepseek-v4-flash");
 pref("maxTokenThreshold", 120000);
+pref("minParagraphChars", 180);
 pref("autoAnnotate", true);
 pref("colorKeyFinding", "#ffd400");
 pref("colorMethodology", "#2ea8e5");

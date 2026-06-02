@@ -11,6 +11,7 @@ declare namespace _ZoteroTypes {
       "apiBaseUrl": string;
       "modelName": string;
       "maxTokenThreshold": number;
+      "minParagraphChars": number;
       "autoAnnotate": boolean;
       "colorKeyFinding": string;
       "colorMethodology": string;

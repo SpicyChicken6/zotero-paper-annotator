@@ -2,6 +2,45 @@ import type { TextItem } from "./pdfExtractor";
 
 type Rect = [number, number, number, number]; // [x1, y1, x2, y2]
 
+const MIN_FUZZY_QUOTE_LENGTH = 20;
+const MAX_FUZZY_QUOTE_LENGTH = 120;
+const MAX_FUZZY_PAGE_LENGTH = 5000;
+const MAX_FUZZY_CANDIDATES = 24;
+const MAX_ANCHOR_OCCURRENCES = 6;
+const FUZZY_START_OFFSETS = [-2, -1, 0, 1, 2];
+const COMMON_ANCHOR_WORDS = new Set([
+  "about",
+  "after",
+  "also",
+  "among",
+  "because",
+  "before",
+  "being",
+  "between",
+  "could",
+  "during",
+  "first",
+  "found",
+  "have",
+  "other",
+  "should",
+  "their",
+  "there",
+  "these",
+  "those",
+  "through",
+  "under",
+  "using",
+  "which",
+  "while",
+  "would",
+]);
+
+interface FuzzyAnchor {
+  text: string;
+  quoteIndex: number;
+}
+
 /**
  * Normalize whitespace in a string for comparison.
  */
@@ -39,6 +78,122 @@ function levenshteinDistance(a: string, b: string): number {
   return prev[n];
 }
 
+function chooseFuzzyAnchors(normalizedQuote: string): FuzzyAnchor[] {
+  const anchors: FuzzyAnchor[] = [];
+  const wordPattern = /[a-z0-9][a-z0-9'-]{4,}/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = wordPattern.exec(normalizedQuote)) !== null) {
+    const text = match[0];
+    if (!COMMON_ANCHOR_WORDS.has(text)) {
+      anchors.push({ text, quoteIndex: match.index });
+    }
+  }
+
+  if (anchors.length <= 3) {
+    return anchors;
+  }
+
+  const selected = new Map<string, FuzzyAnchor>();
+  const addAnchor = (anchor: FuzzyAnchor) => {
+    if (!selected.has(anchor.text)) {
+      selected.set(anchor.text, anchor);
+    }
+  };
+
+  addAnchor(anchors[0]);
+  addAnchor(anchors[Math.floor(anchors.length / 2)]);
+  addAnchor(anchors[anchors.length - 1]);
+
+  const longestAnchors = [...anchors].sort(
+    (a, b) => b.text.length - a.text.length,
+  );
+  for (const anchor of longestAnchors) {
+    addAnchor(anchor);
+    if (selected.size >= 6) break;
+  }
+
+  return [...selected.values()];
+}
+
+function addCandidateStart(
+  candidates: Set<number>,
+  start: number,
+  maxStart: number,
+): void {
+  for (const offset of FUZZY_START_OFFSETS) {
+    const candidateStart = Math.max(0, Math.min(maxStart, start + offset));
+    candidates.add(candidateStart);
+    if (candidates.size >= MAX_FUZZY_CANDIDATES) {
+      return;
+    }
+  }
+}
+
+function findFuzzyMatch(
+  normalizedQuote: string,
+  normalizedPage: string,
+): number {
+  const quoteLen = normalizedQuote.length;
+
+  if (
+    quoteLen < MIN_FUZZY_QUOTE_LENGTH ||
+    quoteLen > MAX_FUZZY_QUOTE_LENGTH ||
+    normalizedPage.length > MAX_FUZZY_PAGE_LENGTH ||
+    normalizedPage.length < quoteLen
+  ) {
+    return -1;
+  }
+
+  const anchors = chooseFuzzyAnchors(normalizedQuote);
+  if (anchors.length === 0) {
+    return -1;
+  }
+
+  const maxStart = normalizedPage.length - quoteLen;
+  const candidates = new Set<number>();
+
+  for (const anchor of anchors) {
+    let searchFrom = 0;
+    let occurrences = 0;
+
+    while (occurrences < MAX_ANCHOR_OCCURRENCES) {
+      const anchorPos = normalizedPage.indexOf(anchor.text, searchFrom);
+      if (anchorPos === -1) break;
+
+      addCandidateStart(candidates, anchorPos - anchor.quoteIndex, maxStart);
+      if (candidates.size >= MAX_FUZZY_CANDIDATES) break;
+
+      searchFrom = anchorPos + anchor.text.length;
+      occurrences += 1;
+    }
+
+    if (candidates.size >= MAX_FUZZY_CANDIDATES) break;
+  }
+
+  if (candidates.size === 0) {
+    return -1;
+  }
+
+  const maxDist = Math.max(2, Math.floor(quoteLen * 0.12));
+  let bestDist = maxDist + 1;
+  let bestPos = -1;
+
+  for (const candidateStart of candidates) {
+    const window = normalizedPage.substring(
+      candidateStart,
+      candidateStart + quoteLen,
+    );
+    const dist = levenshteinDistance(normalizedQuote, window);
+    if (dist < bestDist) {
+      bestDist = dist;
+      bestPos = candidateStart;
+    }
+  }
+
+  return bestPos >= 0 && bestDist <= maxDist ? bestPos : -1;
+}
+
 /**
  * Find a quote in a page's text and return the bounding rects of the matched text items.
  *
@@ -58,29 +213,8 @@ function findQuoteInPage(
 
   let pos = normalizedPage.indexOf(normalizedQuote);
 
-  // Fuzzy fallback using sliding-window Levenshtein distance
   if (pos === -1) {
-    const maxDist = Math.max(3, Math.floor(normalizedQuote.length * 0.15));
-    let bestDist = maxDist + 1;
-    let bestPos = -1;
-    const windowLen = normalizedQuote.length;
-
-    // Only attempt if quote is reasonable length (avoid O(n*m) on huge texts)
-    if (windowLen <= 500 && normalizedPage.length <= 50000) {
-      for (let i = 0; i <= normalizedPage.length - windowLen; i++) {
-        const window = normalizedPage.substring(i, i + windowLen);
-        const dist = levenshteinDistance(normalizedQuote, window);
-        if (dist < bestDist) {
-          bestDist = dist;
-          bestPos = i;
-          if (dist === 0) break; // exact match found
-        }
-      }
-      if (bestPos >= 0 && bestDist <= maxDist) {
-        pos = bestPos;
-      }
-    }
-
+    pos = findFuzzyMatch(normalizedQuote, normalizedPage);
     if (pos === -1) {
       return null;
     }

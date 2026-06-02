@@ -1,6 +1,6 @@
 # Zotero Paper Annotator
 
-A Zotero 7 plugin that automatically annotates academic papers with LLM-powered highlights and summaries. When you open a PDF, the plugin extracts the text, sends it to the DeepSeek API (or any OpenAI-compatible endpoint), and creates color-coded highlight annotations directly on the PDF.
+A Zotero 7 plugin that automatically annotates academic papers with LLM-powered highlights and summaries. When you open a PDF, the plugin extracts the text, sends it to OpenRouter by default (or another OpenAI-compatible endpoint), and creates color-coded highlight annotations directly on the PDF.
 
 ## Features
 
@@ -14,12 +14,12 @@ A Zotero 7 plugin that automatically annotates academic papers with LLM-powered 
 - **Smart skip** -- papers that have already been annotated are skipped automatically
 - **Fuzzy text matching** -- quotes are matched to PDF positions using Unicode normalization and Levenshtein distance fallback
 - **Configurable** -- API endpoint, model, token limits, and auto-annotate toggle are all adjustable in preferences
-- **Compatible with any OpenAI-compatible API** -- DeepSeek by default, but works with any provider that supports the `/v1/chat/completions` endpoint
+- **OpenRouter-first, OpenAI-compatible** -- defaults to OpenRouter while keeping the endpoint and model configurable for other providers that support chat completions
 
 ## Requirements
 
 - Zotero 7 or later
-- An API key from [DeepSeek](https://platform.deepseek.com/) (or another OpenAI-compatible provider)
+- An API key from [OpenRouter](https://openrouter.ai/) (or another OpenAI-compatible provider)
 
 ## Installation
 
@@ -31,12 +31,14 @@ A Zotero 7 plugin that automatically annotates academic papers with LLM-powered 
 ## Setup
 
 1. Go to **Edit > Settings > Zotero Paper Annotator** (or **Zotero > Settings** on macOS)
-2. Enter your API key
+2. Enter your OpenRouter API key
 3. (Optional) Adjust other settings:
-   - **API Base URL** -- default: `https://api.deepseek.com`
-   - **Model Name** -- default: `deepseek-chat`
+   - **API Base URL** -- default: `https://openrouter.ai/api`
+   - **Model Slug** -- default: `deepseek/deepseek-v4-flash`
    - **Max Token Threshold** -- default: `120000` (papers exceeding this are skipped)
    - **Auto-annotate** -- enabled by default; disable to prevent automatic annotation on PDF open
+
+The plugin appends `/v1/chat/completions` to the configured base URL. If you use OpenRouter, keep the default base URL as `https://openrouter.ai/api`; entering `https://openrouter.ai/api/v1` is also normalized safely. The request uses `response_format: { "type": "json_object" }`; OpenRouter supports this parameter, but model support can vary, so choose a model that supports JSON mode if you change the default.
 
 ## Usage
 
@@ -92,7 +94,7 @@ src/
   hooks.ts                  # Zotero lifecycle hooks & tab notifier
   modules/
     pipeline.ts             # Main orchestration flow
-    llmClient.ts            # DeepSeek/OpenAI API client
+    llmClient.ts            # OpenRouter/OpenAI-compatible API client
     pdfExtractor.ts         # PDF.js text extraction with coordinates
     annotator.ts            # Zotero annotation creation
     textMatcher.ts          # Fuzzy quote-to-position matching
@@ -110,6 +112,37 @@ addon/
   prefs.js                  # Default preference values
   content/                  # UI files (preferences XHTML, CSS, icons)
   locale/en-US/             # Localization strings
+```
+
+## Data Flow
+
+The following diagram illustrates how data flows through the plugin modules when you open a PDF:
+
+```
+PDF opens in Zotero
+        │
+        ▼
+hooks.ts: tab notifier fires
+        │
+        ▼
+pipeline.ts: runPipeline(reader)
+        │
+        ├── skipCheck.isAlreadyAnnotated() ──► skip if tagged
+        │
+        ├── pdfExtractor.extractText(reader) ──► { fullText, pages[] }
+        │
+        ├── tokenEstimator.exceedsTokenLimit()
+        │
+        ├── llmClient.callLLM(fullText) ──► { summary, annotations[] }
+        │
+        └── annotator.createAnnotations(...)
+              ├── For each annotation:
+              │     textMatcher.findQuoteInPage() ──► rects
+              │     → save Zotero annotation item (highlight + color + position)
+              │
+              ├── saveSummaryNote() ──► HTML note on parent item
+              │
+              └── skipCheck.markAsAnnotated() ──► add "zpa-annotated" tag
 ```
 
 ## License

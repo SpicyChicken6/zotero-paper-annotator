@@ -9,6 +9,20 @@ import { config } from "../../package.json";
 
 const inProgressItems = new Set<number>();
 
+interface PipelineItemScope {
+  stateItem: Zotero.Item;
+  stateItemID: number;
+  noteParent: Zotero.Item;
+}
+
+function resolvePipelineItemScope(attachment: Zotero.Item): PipelineItemScope {
+  return {
+    stateItem: attachment,
+    stateItemID: attachment.id,
+    noteParent: attachment.parentItem ?? attachment,
+  };
+}
+
 /**
  * Run the full annotation pipeline for a reader instance.
  * Returns null if the paper was skipped, or an AnnotationResult if annotated.
@@ -44,23 +58,18 @@ async function runPipeline(
     return null;
   }
 
-  // Get the parent item (the library entry)
-  const parentItem = attachment.parentItem;
-  if (!parentItem) {
-    Zotero.debug("[ZPA] Attachment has no parent item");
-    return null;
-  }
+  const itemScope = resolvePipelineItemScope(attachment);
 
-  // Race condition guard: skip if pipeline is already running for this item
-  if (inProgressItems.has(parentItem.id)) {
-    ztoolkit.log("ZPA: Pipeline already running for this item, skipping");
+  // Race condition guard: skip if pipeline is already running for this PDF.
+  if (inProgressItems.has(itemScope.stateItemID)) {
+    ztoolkit.log("ZPA: Pipeline already running for this PDF, skipping");
     return null;
   }
-  inProgressItems.add(parentItem.id);
+  inProgressItems.add(itemScope.stateItemID);
   try {
     // Skip check
-    if (isAlreadyAnnotated(parentItem)) {
-      Zotero.debug("[ZPA] Paper already annotated, skipping");
+    if (isAlreadyAnnotated(itemScope.stateItem)) {
+      Zotero.debug("[ZPA] PDF already annotated, skipping");
       return null;
     }
 
@@ -96,10 +105,11 @@ async function runPipeline(
     let result;
     try {
       result = await createAnnotations(
-        parentItem,
+        itemScope.noteParent,
         attachment.id,
         extraction,
         llmResponse,
+        itemScope.stateItem,
       );
     } catch (err) {
       ztoolkit.log(`ZPA: Error creating annotations: ${err}`);
@@ -114,7 +124,7 @@ async function runPipeline(
     );
     return result;
   } finally {
-    inProgressItems.delete(parentItem.id);
+    inProgressItems.delete(itemScope.stateItemID);
   }
 }
 
@@ -131,4 +141,4 @@ function showNotification(message: string): void {
   }
 }
 
-export { runPipeline };
+export { resolvePipelineItemScope, runPipeline };

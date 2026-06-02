@@ -14,6 +14,7 @@ export type FluentMessageId =
   | 'pref-help'
   | 'pref-max-tokens'
   | 'pref-model-name'
+  | 'pref-openrouter-help'
   | 'pref-title'
   | 'startup-begin'
   | 'startup-finish';

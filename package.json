@@ -23,6 +23,7 @@
   "scripts": {
     "start": "zotero-plugin serve",
     "build": "zotero-plugin build && tsc --noEmit",
+    "build:release": "npm run build && mkdir -p release && cp .scaffold/build/zotero-paper-annotator.xpi release/zotero-paper-annotator.xpi",
     "lint:check": "prettier --check . && eslint .",
     "lint:fix": "prettier --write . && eslint . --fix",
     "release": "zotero-plugin release",

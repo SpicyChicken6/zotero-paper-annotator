@@ -1,3 +1,4 @@
+import { config, homepage } from "../../package.json";
 import { getPref } from "../utils/prefs";
 
 const VALID_CATEGORIES = [
@@ -8,6 +9,11 @@ const VALID_CATEGORIES = [
 ] as const;
 
 type AnnotationCategory = (typeof VALID_CATEGORIES)[number];
+
+const OPENROUTER_BASE_URL = "https://openrouter.ai/api";
+const CHAT_COMPLETIONS_PATH = "/v1/chat/completions";
+const JSON_MODE_HELP =
+  "If using OpenRouter, choose a model that supports JSON response_format; support varies by model.";
 
 interface LLMAnnotation {
   page: number;
@@ -52,7 +58,9 @@ function parseAnnotationResponse(raw: string): LLMResponse {
     }
     parsed = JSON.parse(cleaned);
   } catch {
-    throw new Error(`Invalid JSON in LLM response: ${raw.slice(0, 100)}`);
+    throw new Error(
+      `Invalid JSON in LLM response: ${raw.slice(0, 100)}. ${JSON_MODE_HELP}`,
+    );
   }
 
   const obj = parsed as Record<string, unknown>;
@@ -88,29 +96,107 @@ function parseAnnotationResponse(raw: string): LLMResponse {
   };
 }
 
+function isLocalHttpHost(hostname: string) {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1" ||
+    hostname === "[::1]"
+  );
+}
+
+function createInvalidBaseUrlError(baseUrl: string) {
+  return new Error(
+    `Invalid API base URL. For OpenRouter, use ${OPENROUTER_BASE_URL}; the plugin adds ${CHAT_COMPLETIONS_PATH} automatically. HTTPS is required except for http://localhost. Got: ${baseUrl}`,
+  );
+}
+
+function normalizeApiBaseUrl(rawBaseUrl: string) {
+  const baseUrl = rawBaseUrl.trim();
+  let parsed: URL;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    throw createInvalidBaseUrlError(rawBaseUrl);
+  }
+
+  if (
+    parsed.protocol !== "https:" &&
+    !(parsed.protocol === "http:" && isLocalHttpHost(parsed.hostname))
+  ) {
+    throw createInvalidBaseUrlError(rawBaseUrl);
+  }
+
+  parsed.hash = "";
+  parsed.search = "";
+  return parsed;
+}
+
+function buildChatCompletionsUrl(rawBaseUrl: string) {
+  const url = normalizeApiBaseUrl(rawBaseUrl);
+  const path = url.pathname.replace(/\/+$/, "");
+
+  if (path.endsWith(CHAT_COMPLETIONS_PATH)) {
+    url.pathname = path;
+  } else if (path.endsWith("/v1")) {
+    url.pathname = `${path}/chat/completions`;
+  } else {
+    url.pathname = `${path}${CHAT_COMPLETIONS_PATH}`;
+  }
+
+  return url.toString();
+}
+
+function isOpenRouterUrl(url: string) {
+  return new URL(url).hostname === "openrouter.ai";
+}
+
+function buildRequestHeaders(apiKey: string, url: string) {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${apiKey}`,
+  };
+
+  if (isOpenRouterUrl(url)) {
+    if (/^https?:\/\//.test(homepage)) {
+      headers["HTTP-Referer"] = homepage;
+    }
+    headers["X-OpenRouter-Title"] = config.addonName;
+  }
+
+  return headers;
+}
+
+function createAbortController(): AbortController | undefined {
+  const Controller = (globalThis as any).AbortController;
+  return typeof Controller === "function" ? new Controller() : undefined;
+}
+
+function isAbortError(err: unknown) {
+  return (
+    (typeof DOMException !== "undefined" &&
+      err instanceof DOMException &&
+      err.name === "AbortError") ||
+    (typeof err === "object" &&
+      err !== null &&
+      (err as { name?: string }).name === "AbortError")
+  );
+}
+
 async function callLLM(paperText: string): Promise<LLMResponse> {
   const apiKey = getPref("apiKey");
   const baseUrl = getPref("apiBaseUrl");
   const model = getPref("modelName");
 
-  if (!/^https:\/\/|^http:\/\/localhost/.test(baseUrl as string)) {
-    throw new Error(
-      `Invalid API base URL: must start with https:// or http://localhost. Got: ${baseUrl}`,
-    );
-  }
+  const url = buildChatCompletionsUrl(baseUrl);
 
-  const url = `${baseUrl}/v1/chat/completions`;
-
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120_000);
+  const controller = createAbortController();
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   let response: Response;
   try {
-    response = await fetch(url, {
+    const requestInit: RequestInit = {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
+      headers: buildRequestHeaders(apiKey, url),
       body: JSON.stringify({
         model,
         messages: [
@@ -120,21 +206,34 @@ async function callLLM(paperText: string): Promise<LLMResponse> {
         response_format: { type: "json_object" },
         temperature: 0.1,
       }),
-      signal: controller.signal,
+    };
+    if (controller) {
+      requestInit.signal = controller.signal;
+    }
+
+    const timeoutPromise = new Promise<Response>((_, reject) => {
+      timeoutId = setTimeout(() => {
+        controller?.abort();
+        reject(new Error("LLM request timed out after 120 seconds"));
+      }, 120_000);
     });
-    clearTimeout(timeoutId);
+
+    response = await Promise.race([fetch(url, requestInit), timeoutPromise]);
   } catch (err) {
-    clearTimeout(timeoutId);
-    if (err instanceof DOMException && err.name === "AbortError") {
+    if (isAbortError(err)) {
       throw new Error("LLM request timed out after 120 seconds");
     }
     throw err;
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
   }
 
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(
-      `LLM API error (${response.status}): ${errorText.slice(0, 200)}`,
+      `LLM API error (${response.status}): ${errorText.slice(0, 200)}. ${JSON_MODE_HELP}`,
     );
   }
 

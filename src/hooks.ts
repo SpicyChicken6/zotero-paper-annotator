@@ -5,6 +5,56 @@ import { registerPrefsScripts } from "./modules/preferenceScript";
 
 let notifierID: string | undefined;
 
+async function waitForReadyReader(
+  tabID: string,
+): Promise<_ZoteroTypes.ReaderInstance | null> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const reader = Zotero.Reader.getByTabID(tabID);
+    if (
+      (reader as any)?._internalReader?._primaryView?._iframe?.contentWindow
+    ) {
+      return reader;
+    }
+    await Zotero.Promise.delay(500);
+  }
+  return null;
+}
+
+async function runPipelineForReader(
+  reader: _ZoteroTypes.ReaderInstance,
+): Promise<void> {
+  try {
+    await runPipeline(reader);
+  } catch (err) {
+    Zotero.debug(`[ZPA] Pipeline error: ${err}`);
+  }
+}
+
+async function runPipelineForTab(tabID: string): Promise<void> {
+  const reader = await waitForReadyReader(tabID);
+  if (!reader) {
+    ztoolkit.log("ZPA: Reader not ready after 10s, skipping");
+    return;
+  }
+
+  await runPipelineForReader(reader);
+}
+
+async function runPipelineForExistingReaders(): Promise<void> {
+  await Zotero.Promise.delay(2000);
+  const readers = ((Zotero.Reader as any)._readers ??
+    []) as _ZoteroTypes.ReaderInstance[];
+
+  Zotero.debug(`[ZPA] Checking ${readers.length} existing reader(s)`);
+  for (const reader of readers) {
+    if (
+      (reader as any)?._internalReader?._primaryView?._iframe?.contentWindow
+    ) {
+      await runPipelineForReader(reader);
+    }
+  }
+}
+
 async function onStartup() {
   await Promise.all([
     Zotero.initializationPromise,
@@ -22,29 +72,9 @@ async function onStartup() {
         type: string,
         ids: Array<string | number>,
       ) => {
-        if (type === "tab" && event === "add") {
+        if (type === "tab" && (event === "add" || event === "select")) {
           for (const id of ids) {
-            // Poll until the reader is fully initialized
-            let reader = null;
-            for (let attempt = 0; attempt < 20; attempt++) {
-              reader = Zotero.Reader.getByTabID(String(id));
-              if (
-                (reader as any)?._internalReader?._primaryView?._iframe
-                  ?.contentWindow
-              )
-                break;
-              reader = null;
-              await Zotero.Promise.delay(500);
-            }
-            if (!reader) {
-              ztoolkit.log("ZPA: Reader not ready after 10s, skipping");
-              continue;
-            }
-            try {
-              await runPipeline(reader);
-            } catch (err) {
-              Zotero.debug(`[ZPA] Pipeline error: ${err}`);
-            }
+            await runPipelineForTab(String(id));
           }
         }
       },
@@ -59,6 +89,7 @@ async function onStartup() {
 
   addon.data.initialized = true;
   Zotero.debug("[ZPA] Plugin started");
+  runPipelineForExistingReaders();
 }
 
 async function onMainWindowLoad(win: _ZoteroTypes.MainWindow): Promise<void> {

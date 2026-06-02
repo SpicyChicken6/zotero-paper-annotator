@@ -5,7 +5,16 @@ const ZPA_TAG = "zpa-annotated";
  */
 export function isAlreadyAnnotated(item: Zotero.Item): boolean {
   const tags = item.getTags();
-  return tags.some((t: { tag: string }) => t.tag === ZPA_TAG);
+  const hasZpaTag = tags.some((t: { tag: string }) => t.tag === ZPA_TAG);
+  if (!hasZpaTag) {
+    return false;
+  }
+
+  if (typeof item.getAnnotations === "function") {
+    return item.getAnnotations().length > 0;
+  }
+
+  return true;
 }
 
 /**

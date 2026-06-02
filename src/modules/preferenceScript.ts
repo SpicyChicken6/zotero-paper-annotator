@@ -1,5 +1,13 @@
 import { config } from "../../package.json";
 import { getPref, setPref } from "../utils/prefs";
+import { normalizeMaxTokenThreshold } from "../utils/tokenEstimator";
+
+type PluginPrefsMap = _ZoteroTypes.Prefs["PluginPrefsMap"];
+type PrefValueType = "string" | "number" | "boolean";
+type ValueControl = Element & { value: string };
+type CheckedControl = Element & { checked: boolean };
+
+const boundPrefControls = new WeakSet<Element>();
 
 export async function registerPrefsScripts(_window: Window) {
   if (!addon.data.prefs) {
@@ -15,6 +23,32 @@ export async function registerPrefsScripts(_window: Window) {
   bindPrefEvents();
 }
 
+function hasValue(el: Element): el is ValueControl {
+  return "value" in el;
+}
+
+function hasChecked(el: Element): el is CheckedControl {
+  return "checked" in el;
+}
+
+function readControlValue(el: Element, type: PrefValueType) {
+  if (type === "boolean") {
+    return hasChecked(el) ? el.checked : undefined;
+  }
+
+  if (!hasValue(el)) {
+    return undefined;
+  }
+
+  if (type === "number") {
+    const value = normalizeMaxTokenThreshold(el.value);
+    el.value = String(value);
+    return value;
+  }
+
+  return el.value;
+}
+
 function loadPrefsValues() {
   const doc = addon.data.prefs?.window.document;
   if (!doc) return;
@@ -22,12 +56,16 @@ function loadPrefsValues() {
   const setVal = (id: string, value: string | boolean) => {
     const el = doc.querySelector(`#${id}`);
     if (!el) return;
-    if (el instanceof HTMLInputElement) {
-      if (el.type === "checkbox") {
-        el.checked = value as boolean;
-      } else {
-        el.value = String(value);
+
+    if (typeof value === "boolean") {
+      if (hasChecked(el)) {
+        el.checked = value;
       }
+      return;
+    }
+
+    if (hasValue(el)) {
+      el.value = String(value);
     }
   };
 
@@ -39,7 +77,7 @@ function loadPrefsValues() {
   setVal(`zotero-prefpane-${config.addonRef}-modelName`, getPref("modelName"));
   setVal(
     `zotero-prefpane-${config.addonRef}-maxTokenThreshold`,
-    String(getPref("maxTokenThreshold")),
+    String(normalizeMaxTokenThreshold(getPref("maxTokenThreshold"))),
   );
   setVal(
     `zotero-prefpane-${config.addonRef}-autoAnnotate`,
@@ -53,25 +91,20 @@ function bindPrefEvents() {
 
   const bindInput = (
     id: string,
-    prefKey: keyof _ZoteroTypes.Prefs["PluginPrefsMap"],
-    type: "string" | "number" | "boolean" = "string",
+    prefKey: keyof PluginPrefsMap,
+    type: PrefValueType = "string",
   ) => {
     const el = doc.querySelector(`#${id}`);
     if (!el) return;
+    if (boundPrefControls.has(el)) return;
 
-    const eventType = "change";
+    boundPrefControls.add(el);
 
-    el.addEventListener(eventType, (e: Event) => {
-      const target = e.target as HTMLInputElement;
-      let value: any;
-      if (type === "boolean") {
-        value = target.checked;
-      } else if (type === "number") {
-        value = parseInt(target.value, 10);
-      } else {
-        value = target.value;
-      }
-      setPref(prefKey, value);
+    el.addEventListener("change", () => {
+      const value = readControlValue(el, type);
+      if (value === undefined) return;
+
+      setPref(prefKey, value as PluginPrefsMap[typeof prefKey]);
     });
   };
 

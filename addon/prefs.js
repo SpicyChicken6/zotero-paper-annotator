@@ -1,6 +1,6 @@
 pref("apiKey", "");
-pref("apiBaseUrl", "https://api.deepseek.com");
-pref("modelName", "deepseek-chat");
+pref("apiBaseUrl", "https://openrouter.ai/api");
+pref("modelName", "deepseek/deepseek-v4-flash");
 pref("maxTokenThreshold", 120000);
 pref("autoAnnotate", true);
 pref("colorKeyFinding", "#ffd400");

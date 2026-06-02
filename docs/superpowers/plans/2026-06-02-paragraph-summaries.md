@@ -13,6 +13,7 @@
 ### Task 1: Paragraph Extraction
 
 **Files:**
+
 - Modify: `src/modules/pdfExtractor.ts`
 - Test: `test/pdfExtractor.test.ts`
 
@@ -24,6 +25,7 @@
 ### Task 2: Paragraph Filtering And Formatting
 
 **Files:**
+
 - Create: `src/modules/paragraphs.ts`
 - Create: `test/paragraphs.test.ts`
 - Modify: `addon/prefs.js`
@@ -36,6 +38,7 @@
 ### Task 3: LLM Paragraph Prompt
 
 **Files:**
+
 - Modify: `src/modules/llmClient.ts`
 - Modify: `test/llmClient.test.ts`
 
@@ -46,6 +49,7 @@
 ### Task 4: Paragraph-Aware Annotation Saving
 
 **Files:**
+
 - Modify: `src/modules/annotator.ts`
 - Modify: `src/modules/skipCheck.ts`
 - Modify: `test/annotator.test.ts`
@@ -58,6 +62,7 @@
 ### Task 5: Pipeline Integration And Verification
 
 **Files:**
+
 - Modify: `src/modules/pipeline.ts`
 - Modify: `README.md`
 - Test: focused Mocha suites and build/lint scripts.

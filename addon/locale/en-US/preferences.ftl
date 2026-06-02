@@ -4,6 +4,7 @@ pref-api-base-url = API Base URL
 pref-model-name = Model Slug
 pref-openrouter-help = Default: OpenRouter endpoint https://openrouter.ai/api with model deepseek/deepseek-v4-flash. The plugin adds /v1/chat/completions; JSON response_format support varies by model.
 pref-max-tokens = Max Token Threshold
+pref-min-paragraph-chars = Min Paragraph Characters
 pref-auto-annotate =
     .label = Auto-annotate on PDF open
 pref-color-key-finding = Key Finding Color

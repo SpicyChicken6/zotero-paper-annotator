@@ -55,6 +55,7 @@ function createPrefsWindow() {
     apiBaseUrl: createControl({ type: "text", value: "" }),
     modelName: createControl({ type: "text", value: "" }),
     maxTokenThreshold: createControl({ type: "number", value: "" }),
+    minParagraphChars: createControl({ type: "number", value: "" }),
     autoAnnotate: createControl({ checked: false }),
   };
   const byId = new Map<string, FakeControl>([
@@ -62,6 +63,7 @@ function createPrefsWindow() {
     [prefId("apiBaseUrl"), controls.apiBaseUrl],
     [prefId("modelName"), controls.modelName],
     [prefId("maxTokenThreshold"), controls.maxTokenThreshold],
+    [prefId("minParagraphChars"), controls.minParagraphChars],
     [prefId("autoAnnotate"), controls.autoAnnotate],
   ]);
   const prefs = new Map<string, string | number | boolean>([
@@ -69,6 +71,7 @@ function createPrefsWindow() {
     [`${config.prefsPrefix}.apiBaseUrl`, "https://api.example.test/v1"],
     [`${config.prefsPrefix}.modelName`, "example-model"],
     [`${config.prefsPrefix}.maxTokenThreshold`, 42000],
+    [`${config.prefsPrefix}.minParagraphChars`, 180],
     [`${config.prefsPrefix}.autoAnnotate`, true],
   ]);
   const setCalls: { key: string; value: string | number | boolean }[] = [];
@@ -142,6 +145,7 @@ describe("preferenceScript", function () {
     );
     assert.equal(prefsWindow.controls.modelName.value, "example-model");
     assert.equal(prefsWindow.controls.maxTokenThreshold.value, "42000");
+    assert.equal(prefsWindow.controls.minParagraphChars.value, "180");
     assert.isTrue(prefsWindow.controls.autoAnnotate.checked);
   });
 
@@ -183,6 +187,24 @@ describe("preferenceScript", function () {
       {
         key: `${config.prefsPrefix}.maxTokenThreshold`,
         value: DEFAULT_MAX_TOKEN_THRESHOLD,
+      },
+    ]);
+  });
+
+  it("saves minimum paragraph length changes as a number", async function () {
+    const prefsWindow = createPrefsWindow();
+    installPrefs(prefsWindow);
+
+    await registerPrefsScripts(prefsWindow.window as unknown as Window);
+
+    prefsWindow.setCalls.length = 0;
+    prefsWindow.controls.minParagraphChars.value = "240";
+    prefsWindow.controls.minParagraphChars.dispatchChange();
+
+    assert.deepEqual(prefsWindow.setCalls, [
+      {
+        key: `${config.prefsPrefix}.minParagraphChars`,
+        value: 240,
       },
     ]);
   });

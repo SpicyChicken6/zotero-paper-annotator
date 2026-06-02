@@ -13,6 +13,7 @@ export type FluentMessageId =
   | 'pref-color-methodology'
   | 'pref-help'
   | 'pref-max-tokens'
+  | 'pref-min-paragraph-chars'
   | 'pref-model-name'
   | 'pref-openrouter-help'
   | 'pref-title'

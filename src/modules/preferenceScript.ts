@@ -80,6 +80,10 @@ function loadPrefsValues() {
     String(normalizeMaxTokenThreshold(getPref("maxTokenThreshold"))),
   );
   setVal(
+    `zotero-prefpane-${config.addonRef}-minParagraphChars`,
+    String(getPref("minParagraphChars")),
+  );
+  setVal(
     `zotero-prefpane-${config.addonRef}-autoAnnotate`,
     getPref("autoAnnotate"),
   );
@@ -122,6 +126,11 @@ function bindPrefEvents() {
   bindInput(
     `zotero-prefpane-${config.addonRef}-maxTokenThreshold`,
     "maxTokenThreshold",
+    "number",
+  );
+  bindInput(
+    `zotero-prefpane-${config.addonRef}-minParagraphChars`,
+    "minParagraphChars",
     "number",
   );
   bindInput(

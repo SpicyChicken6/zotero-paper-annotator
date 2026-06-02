@@ -1,19 +1,19 @@
 # Zotero Paper Annotator
 
-A Zotero 9 plugin that automatically annotates academic papers with LLM-powered highlights and summaries. When you open a PDF, the plugin extracts the text, sends it to OpenRouter by default (or another OpenAI-compatible endpoint), and creates color-coded highlight annotations directly on the PDF.
+A Zotero 9 plugin that automatically annotates academic papers with LLM-powered paragraph summaries. When you open a PDF, the plugin extracts substantial paragraphs, sends them to OpenRouter by default (or another OpenAI-compatible endpoint), and creates color-coded highlight annotations with paragraph-level summary comments directly on the PDF.
 
 ## Features
 
-- **Automatic annotation** -- highlights are created when you open a PDF, no manual trigger needed
+- **Automatic paragraph summaries** -- paragraph summary highlights are created when you open a PDF, no manual trigger needed
 - **Color-coded categories** -- annotations are categorized and colored by type:
   - Key Findings (yellow)
   - Methodology (blue)
   - Conclusions (green)
   - Limitations (orange)
-- **Summary note** -- a concise summary is added as a note on the parent item
-- **Smart skip** -- papers with saved ZPA annotations are skipped automatically, while tag-only failed runs can retry
+- **Summary note** -- a concise whole-paper summary is added as a note on the parent item
+- **Smart skip** -- PDFs with saved paragraph-summary annotations are skipped automatically, while tag-only failed runs can retry
 - **Fuzzy text matching** -- quotes are matched to PDF positions using Unicode normalization and Levenshtein distance fallback
-- **Configurable** -- API endpoint, model, token limits, and auto-annotate toggle are all adjustable in preferences
+- **Configurable** -- API endpoint, model, token limits, paragraph length threshold, and auto-annotate toggle are all adjustable in preferences
 - **OpenRouter-first, OpenAI-compatible** -- defaults to OpenRouter while keeping the endpoint and model configurable for other providers that support chat completions
 
 ## Requirements
@@ -36,6 +36,7 @@ A Zotero 9 plugin that automatically annotates academic papers with LLM-powered 
    - **API Base URL** -- default: `https://openrouter.ai/api`
    - **Model Slug** -- default: `deepseek/deepseek-v4-flash`
    - **Max Token Threshold** -- default: `120000` (papers exceeding this are skipped)
+   - **Min Paragraph Characters** -- default: `180` (shorter fragments are skipped)
    - **Auto-annotate** -- enabled by default; disable to prevent automatic annotation on PDF open
 
 The plugin appends `/v1/chat/completions` to the configured base URL. If you use OpenRouter, keep the default base URL as `https://openrouter.ai/api`; entering `https://openrouter.ai/api/v1` is also normalized safely. The request uses `response_format: { "type": "json_object" }`; OpenRouter supports this parameter, but model support can vary, so choose a model that supports JSON mode if you change the default.
@@ -44,13 +45,14 @@ The plugin appends `/v1/chat/completions` to the configured base URL. If you use
 
 Simply open a PDF in Zotero. If auto-annotate is enabled and the paper hasn't been annotated yet, the plugin will:
 
-1. Extract text from the PDF
-2. Send it to the configured LLM API
-3. Create color-coded highlight annotations at the relevant positions
-4. Add a summary note to the parent item
-5. Tag the item with `zpa-annotated` to prevent re-annotation
+1. Extract substantial paragraphs from the PDF
+2. Send the ordered paragraph list to the configured LLM API
+3. Ask the model for one summary annotation per provided paragraph
+4. Create color-coded highlight annotations with paragraph summary comments
+5. Add a whole-paper summary note to the parent item
+6. Tag the attachment with `zpa-paragraph-summarized` to prevent duplicate paragraph-summary runs
 
-To re-annotate a paper, remove the `zpa-annotated` tag from the item and reopen the PDF.
+To re-annotate a paper, remove the `zpa-paragraph-summarized` tag from the attachment and reopen the PDF. Older `zpa-annotated` tags from selective-summary versions do not block paragraph-summary runs.
 
 ## Development
 
@@ -97,6 +99,7 @@ src/
     pipeline.ts             # Main orchestration flow
     llmClient.ts            # OpenRouter/OpenAI-compatible API client
     pdfExtractor.ts         # Zotero 9 reader text extraction with PDF.js fallback
+    paragraphs.ts           # Paragraph filtering and LLM input formatting
     annotator.ts            # Zotero annotation creation
     textMatcher.ts          # Fuzzy quote-to-position matching
     skipCheck.ts            # Already-annotated detection
@@ -128,22 +131,24 @@ hooks.ts: tab notifier fires
         ▼
 pipeline.ts: runPipeline(reader)
         │
-        ├── skipCheck.isAlreadyAnnotated() ──► skip if tagged and annotations exist
+        ├── skipCheck.isAlreadyAnnotated() ──► skip if paragraph-summary tagged and annotations exist
         │
-        ├── pdfExtractor.extractText(reader) ──► { fullText, pages[] }
+        ├── pdfExtractor.extractText(reader) ──► { fullText, pages[], paragraphs[] }
         │
-        ├── tokenEstimator.exceedsTokenLimit()
+        ├── paragraphs.formatParagraphsForLLM()
         │
-        ├── llmClient.callLLM(fullText) ──► { summary, annotations[] }
+        ├── tokenEstimator.exceedsTokenLimit(paragraphInput)
+        │
+        ├── llmClient.callLLM(paragraphInput) ──► { summary, annotations[] }
         │
         └── annotator.createAnnotations(...)
-              ├── For each annotation:
-              │     textMatcher.findQuoteInPage() ──► rects
+              ├── For each paragraph annotation:
+              │     paragraphId + textMatcher.findQuoteInPage() ──► rects
               │     → save Zotero annotation item (highlight + color + position)
               │
               ├── saveSummaryNote() ──► HTML note on parent item
               │
-              └── skipCheck.markAsAnnotated() ──► add "zpa-annotated" tag
+              └── skipCheck.markAsAnnotated() ──► add "zpa-paragraph-summarized" tag
 ```
 
 ## License

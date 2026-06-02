@@ -159,7 +159,9 @@ function findAnnotationTarget(
   }
 
   const pageIndex = ann.page - 1;
-  const page = extraction.pages.find((candidate) => candidate.pageIndex === pageIndex);
+  const page = extraction.pages.find(
+    (candidate) => candidate.pageIndex === pageIndex,
+  );
   return page ? targetFromPage(page) : null;
 }
 
@@ -213,7 +215,11 @@ async function createAnnotations(
         comment: `[${escapeHtml(ann.category)}] ${escapeHtml(ann.note)}`,
         color: getColorForCategory(ann.category),
         pageLabel: target.pageLabel,
-        sortIndex: buildPdfSortIndex(target.pageIndex, rects, created + skipped),
+        sortIndex: buildPdfSortIndex(
+          target.pageIndex,
+          rects,
+          created + skipped,
+        ),
         position: {
           pageIndex: target.pageIndex,
           rects,

@@ -1,10 +1,12 @@
-import { isAlreadyAnnotated } from "./skipCheck";
+import { isAlreadyAnnotated, ZPA_PARAGRAPH_TAG } from "./skipCheck";
 import { getPref } from "../utils/prefs";
 import { extractText } from "./pdfExtractor";
 import { callLLM } from "./llmClient";
 import { createAnnotations } from "./annotator";
 import { exceedsTokenLimit } from "../utils/tokenEstimator";
+import { formatParagraphsForLLM, getSubstantialParagraphs } from "./paragraphs";
 import type { AnnotationResult } from "./annotator";
+import type { ExtractionResult } from "./pdfExtractor";
 import { config } from "../../package.json";
 
 const inProgressItems = new Set<number>();
@@ -21,6 +23,14 @@ function resolvePipelineItemScope(attachment: Zotero.Item): PipelineItemScope {
     stateItemID: attachment.id,
     noteParent: attachment.parentItem ?? attachment,
   };
+}
+
+function prepareParagraphLLMInput(extraction: ExtractionResult): string {
+  const paragraphs = getSubstantialParagraphs(
+    extraction,
+    getPref("minParagraphChars"),
+  );
+  return formatParagraphsForLLM(paragraphs);
 }
 
 /**
@@ -68,7 +78,7 @@ async function runPipeline(
   inProgressItems.add(itemScope.stateItemID);
   try {
     // Skip check
-    if (isAlreadyAnnotated(itemScope.stateItem)) {
+    if (isAlreadyAnnotated(itemScope.stateItem, ZPA_PARAGRAPH_TAG)) {
       Zotero.debug("[ZPA] PDF already annotated, skipping");
       return null;
     }
@@ -83,9 +93,15 @@ async function runPipeline(
       return null;
     }
 
+    const llmInput = prepareParagraphLLMInput(extraction);
+    if (llmInput.length === 0) {
+      showNotification("No substantial paragraphs found to annotate.");
+      return null;
+    }
+
     // Check token limit
     const maxTokens = getPref("maxTokenThreshold");
-    if (exceedsTokenLimit(extraction.fullText, maxTokens)) {
+    if (exceedsTokenLimit(llmInput, maxTokens)) {
       showNotification("Paper too long to annotate.");
       return null;
     }
@@ -94,7 +110,7 @@ async function runPipeline(
     showNotification("Annotating paper...");
     let llmResponse;
     try {
-      llmResponse = await callLLM(extraction.fullText);
+      llmResponse = await callLLM(llmInput);
     } catch (err) {
       Zotero.debug(`[ZPA] LLM call failed: ${err}`);
       showNotification(`Annotation failed — ${err}`);
@@ -110,6 +126,7 @@ async function runPipeline(
         extraction,
         llmResponse,
         itemScope.stateItem,
+        ZPA_PARAGRAPH_TAG,
       );
     } catch (err) {
       ztoolkit.log(`ZPA: Error creating annotations: ${err}`);
@@ -141,4 +158,4 @@ function showNotification(message: string): void {
   }
 }
 
-export { resolvePipelineItemScope, runPipeline };
+export { prepareParagraphLLMInput, resolvePipelineItemScope, runPipeline };

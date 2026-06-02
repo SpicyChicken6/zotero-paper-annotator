@@ -332,7 +332,8 @@ async function extractText(
         i,
         pageLabel,
         paragraphs.length + 1,
-      )) ?? (await extractPageViaPDFJS(
+      )) ??
+      (await extractPageViaPDFJS(
         pdfDocument,
         i,
         pageLabel,
